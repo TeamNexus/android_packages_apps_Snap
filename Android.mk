@@ -40,7 +40,9 @@ LOCAL_AAPT_FLAGS += --rename-manifest-package org.cyanogenmod.snap
 LOCAL_RENDERSCRIPT_TARGET_API := 23
 LOCAL_JACK_ENABLED := disabled
 
-LOCAL_OVERRIDES_PACKAGES := Camera2
+ifneq ($(TARGET_KEEP_LEGACY_CAMERA_PACKAGE),true)
+  LOCAL_OVERRIDES_PACKAGES := Camera2
+endif
 
 LOCAL_PROGUARD_FLAG_FILES := proguard.flags
 
