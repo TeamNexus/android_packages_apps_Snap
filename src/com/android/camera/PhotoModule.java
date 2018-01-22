@@ -616,6 +616,9 @@ public class PhotoModule
         // Power shutter
         mActivity.initPowerShutter(mPreferences);
 
+        // Max brightness
+        mActivity.initMaxBrightness(mPreferences);
+
         if (mOpenCameraThread == null) {
             mOpenCameraThread = new OpenCameraThread();
             mOpenCameraThread.start();
@@ -2920,6 +2923,9 @@ public class PhotoModule
         // Load the power shutter
         mActivity.initPowerShutter(mPreferences);
 
+        // Load max brightness
+        mActivity.initMaxBrightness(mPreferences);
+
         mNamedImages = null;
 
         if (mLocationManager != null) mLocationManager.recordLocation(false);
@@ -3070,24 +3076,34 @@ public class PhotoModule
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        /*TODO: if (!mActivity.mShowCameraAppView) {
+        // Do not handle any key if the activity is
+        // not in active camera/video mode
+        if (!mActivity.isInCameraApp()) {
             return false;
-        }*/
+        }
         switch (keyCode) {
             case KeyEvent.KEYCODE_VOLUME_UP:
-                if (/*TODO: mActivity.isInCameraApp() &&*/ mFirstTimeInitialized
-                    && (mUI.mMenuInitialized)) {
-                    mUI.onScaleStepResize(true);
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+                if (mFirstTimeInitialized && (mUI.mMenuInitialized)) {
+                    if (!CameraActivity.mPowerShutter && !CameraUtil.hasCameraKey()) {
+                        onShutterButtonFocus(true);
+                    } else {
+                        mUI.onScaleStepResize(true);
+                    }
                 }
                 return true;
             case KeyEvent.KEYCODE_VOLUME_DOWN:
-                if (/*TODO: mActivity.isInCameraApp() &&*/ mFirstTimeInitialized
-                    && (mUI.mMenuInitialized)) {
-                    mUI.onScaleStepResize(false);
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                if (mFirstTimeInitialized && (mUI.mMenuInitialized)) {
+                    if (!CameraActivity.mPowerShutter && !CameraUtil.hasCameraKey()) {
+                        onShutterButtonFocus(true);
+                    } else {
+                        mUI.onScaleStepResize(false);
+                    }
                 }
                 return true;
             case KeyEvent.KEYCODE_FOCUS:
-                if (/*TODO: mActivity.isInCameraApp() &&*/ mFirstTimeInitialized) {
+                if (mFirstTimeInitialized) {
                     if (event.getRepeatCount() == 0) {
                         onShutterButtonFocus(true);
                     }
@@ -3095,6 +3111,7 @@ public class PhotoModule
                 }
                 return false;
             case KeyEvent.KEYCODE_CAMERA:
+            case KeyEvent.KEYCODE_HEADSETHOOK:
                 if (mFirstTimeInitialized && event.getRepeatCount() == 0) {
                     onShutterButtonClick();
                 }
@@ -3112,7 +3129,7 @@ public class PhotoModule
                 return true;
             case KeyEvent.KEYCODE_POWER:
                 if (mFirstTimeInitialized && event.getRepeatCount() == 0
-                        && CameraActivity.mPowerShutter) {
+                        && CameraActivity.mPowerShutter && !CameraUtil.hasCameraKey()) {
                     onShutterButtonFocus(true);
                 }
                 return true;
@@ -3122,12 +3139,15 @@ public class PhotoModule
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        /*TODO: if (!mActivity.mShowCameraAppView) {
-            return false;
-        }*/
         switch (keyCode) {
             case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_VOLUME_DOWN:
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                if (!CameraActivity.mPowerShutter && !CameraUtil.hasCameraKey()
+                        && mFirstTimeInitialized) {
+                    onShutterButtonClick();
+                }
                 return true;
             case KeyEvent.KEYCODE_FOCUS:
                 if (mFirstTimeInitialized) {
@@ -3135,7 +3155,8 @@ public class PhotoModule
                 }
                 return true;
             case KeyEvent.KEYCODE_POWER:
-                if (CameraActivity.mPowerShutter && mFirstTimeInitialized) {
+                if (CameraActivity.mPowerShutter && !CameraUtil.hasCameraKey()
+                        && mFirstTimeInitialized) {
                     onShutterButtonClick();
                 }
                 return true;
@@ -5123,6 +5144,7 @@ public class PhotoModule
         if (mUI.mMenuInitialized) {
             setCameraParametersWhenIdle(UPDATE_PARAM_PREFERENCE);
             mActivity.initPowerShutter(mPreferences);
+            mActivity.initMaxBrightness(mPreferences);
         } else {
             mHandler.sendEmptyMessage(SET_PHOTO_UI_PARAMS);
         }
