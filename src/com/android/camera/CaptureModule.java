@@ -3114,9 +3114,6 @@ public class CaptureModule implements CameraModule, PhotoController,
                     ImageFormat.RAW10);
         if (rawSize != null) {
             mSupportedRawPictureSize = rawSize[0];
-        } else {
-            // TODO: find a better assumption here
-            mSupportedRawPictureSize = prevSizes[0];
         }
         mPreviewSize = getOptimalPreviewSize(mPictureSize, prevSizes);
         Size[] thumbSizes = mSettingsManager.getSupportedThumbnailSizes(getMainCameraId());
