@@ -108,6 +108,7 @@ public class VideoModule implements CameraModule,
     private static final int SWITCH_CAMERA = 8;
     private static final int SWITCH_CAMERA_START_ANIMATION = 9;
     private static final int HANDLE_FLASH_TORCH_DELAY = 10;
+    private static final int SET_FOCUS_RATIO = 11;
 
     private static final int SCREEN_DELAY = 2 * 60 * 1000;
 
@@ -443,6 +444,11 @@ public class VideoModule implements CameraModule,
 
                 case HANDLE_FLASH_TORCH_DELAY: {
                     forceFlashOff(!mPreviewFocused);
+                    break;
+                }
+
+                case SET_FOCUS_RATIO: {
+                    mUI.getFocusRing().setRadiusRatio((Float)msg.obj);
                     break;
                 }
 
@@ -962,8 +968,18 @@ public class VideoModule implements CameraModule,
             if (mPaused) return;
 
             //setCameraState(IDLE);
+            mCameraDevice.refreshParameters();
+            mFocusManager.setParameters(mCameraDevice.getParameters());
             mFocusManager.onAutoFocus(focused, false);
         }
+    }
+
+    @Override
+    public void setFocusRatio(float ratio) {
+        mHandler.removeMessages(SET_FOCUS_RATIO);
+        Message m = mHandler.obtainMessage(SET_FOCUS_RATIO);
+        m.obj = ratio;
+        mHandler.sendMessage(m);
     }
 
     private void readVideoPreferences() {
@@ -1483,7 +1499,7 @@ public class VideoModule implements CameraModule,
                     R.array.pref_video_focusmode_default_array);
             mFocusManager = new FocusOverlayManager(mPreferences, defaultFocusModes,
                     mParameters, this, mirror,
-                    mActivity.getMainLooper(), mUI, mActivity);
+                    mActivity.getMainLooper(), mUI.getFocusRing(), mActivity);
         }
     }
 
@@ -3407,7 +3423,6 @@ public class VideoModule implements CameraModule,
         if (mParameters.getMaxNumDetectedFaces() > 0) {
             mFaceDetectionStarted = false;
             mCameraDevice.setFaceDetectionCallback(null, null);
-            mUI.pauseFaceDetection();
             mCameraDevice.stopFaceDetection();
             mUI.onStopFaceDetection();
         }

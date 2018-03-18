@@ -167,6 +167,7 @@ public class PhotoModule
     private static final int ON_PREVIEW_STARTED = 13;
     private static final int INSTANT_CAPTURE = 14;
     private static final int UNLOCK_CAM_SHUTTER = 15;
+    private static final int SET_FOCUS_RATIO = 16;
 
     private static final int NO_DEPTH_EFFECT = 0;
     private static final int DEPTH_EFFECT_SUCCESS = 1;
@@ -175,7 +176,6 @@ public class PhotoModule
     private static final int LOW_LIGHT = 4;
     private static final int SUBJECT_NOT_FOUND = 5;
     private static final int TOUCH_TO_FOCUS = 6;
-
 
     // The subset of parameters we need to update in setCameraParameters().
     private static final int UPDATE_PARAM_INITIALIZE = 1;
@@ -574,6 +574,11 @@ public class PhotoModule
                     mUI.enableShutter(true);
                     break;
                 }
+
+                case SET_FOCUS_RATIO: {
+                    mUI.getFocusRing().setRadiusRatio((Float)msg.obj);
+                    break;
+                }
             }
         }
     }
@@ -759,7 +764,7 @@ public class PhotoModule
         Log.v(TAG, "onCameraOpened");
         openCameraCommon();
         resizeForPreviewAspectRatio();
-        updateFocusManager(mUI);
+        mFocusManager.setFocusRing(mUI.getFocusRing());
     }
 
     private void switchCamera() {
@@ -792,7 +797,6 @@ public class PhotoModule
         }
         closeCamera();
         mUI.collapseCameraControls();
-        mUI.clearFaces();
         if (mFocusManager != null) mFocusManager.removeMessages();
 
         // Restart the camera and initialize the UI. From onCreate.
@@ -1057,10 +1061,17 @@ public class PhotoModule
         if (mParameters.getMaxNumDetectedFaces() > 0) {
             mFaceDetectionStarted = false;
             mCameraDevice.setFaceDetectionCallback(null, null);
-            mUI.pauseFaceDetection();
             mCameraDevice.stopFaceDetection();
             mUI.onStopFaceDetection();
         }
+    }
+
+    @Override
+    public void setFocusRatio(float ratio) {
+        mHandler.removeMessages(SET_FOCUS_RATIO);
+        Message m = mHandler.obtainMessage(SET_FOCUS_RATIO);
+        m.obj = ratio;
+        mHandler.sendMessage(m);
     }
 
     // TODO: need to check cached background apps memory and longshot ION memory
@@ -1336,8 +1347,6 @@ public class PhotoModule
                 return;
             }
 
-            mFocusManager.updateFocusUI(); // Ensure focus indicator is hidden.
-
             String jpegFilePath = new String(jpegData);
             mNamedImages.nameNewImage(mCaptureStartTime);
             NamedEntity name = mNamedImages.getNextNameEntity();
@@ -1512,8 +1521,6 @@ public class PhotoModule
                 mCameraDevice.setLongshot(false);
             }
 
-            mFocusManager.updateFocusUI(); // Ensure focus indicator is hidden.
-
             boolean needRestartPreview = !mIsImageCaptureIntent
                     && !mPreviewRestartSupport
                     && (mCameraState != LONGSHOT)
@@ -1559,7 +1566,6 @@ public class PhotoModule
                         || CameraUtil.FOCUS_MODE_MW_CONTINUOUS_PICTURE.equals(mFocusManager.getFocusMode(false))) {
                     mCameraDevice.cancelAutoFocus();
                 }
-                mUI.resumeFaceDetection();
                 if (!mIsImageCaptureIntent) {
                     setCameraState(IDLE);
                 }
@@ -1793,6 +1799,8 @@ public class PhotoModule
                     setCameraState(IDLE);
                     break;
             }
+            mCameraDevice.refreshParameters();
+            mFocusManager.setParameters(mCameraDevice.getParameters());
             mFocusManager.onAutoFocus(focused, mUI.isShutterPressed());
         }
     }
@@ -1803,6 +1811,8 @@ public class PhotoModule
         @Override
         public void onAutoFocusMoving(
                 boolean moving, CameraProxy camera) {
+            mCameraDevice.refreshParameters();
+            mFocusManager.setParameters(mCameraDevice.getParameters());
             mFocusManager.onAutoFocusMoving(moving);
         }
     }
@@ -2968,25 +2978,9 @@ public class PhotoModule
                 if (mFocusManager == null) {
                     mFocusManager = new FocusOverlayManager(mPreferences, defaultFocusModes,
                             mInitialParams, this, mMirror,
-                            mActivity.getMainLooper(), mUI, mActivity);
+                            mActivity.getMainLooper(), mUI != null ? mUI.getFocusRing() : null, mActivity);
                 }
             }
-        }
-    }
-
-    private void updateFocusManager(PhotoUI mUI) {
-        // Idea here is to let focus manager create in camera open thread
-        // (in initializeFocusManager) even if photoUI is null by that time so
-        // as to not block start preview process. Once UI creation is done,
-        // we will update focus manager with proper UI.
-        if (mFocusManager != null && mUI != null) {
-            mFocusManager.setPhotoUI(mUI);
-
-            View root = mUI.getRootView();
-            // These depend on camera parameters.
-            int width = root.getWidth();
-            int height = root.getHeight();
-            mFocusManager.setPreviewSize(width, height);
         }
     }
 
@@ -3063,7 +3057,6 @@ public class PhotoModule
         }
         // Check if metering area or focus area is supported.
         if (!mFocusAreaSupported && !mMeteringAreaSupported) return;
-        if (! mFocusManager.getPreviewRect().contains(x, y)) return;
         mFocusManager.onSingleTapUp(x, y);
     }
 
@@ -3951,7 +3944,7 @@ public class PhotoModule
 
         if(!mFocusManager.getFocusMode(false).equals(Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) &&
             !mFocusManager.isFocusCompleted()) {
-            mUI.clearFocus();
+            mUI.getFocusRing().stopFocusAnimations();
         }
 
         String bokehMode = mPreferences.getString(
@@ -4522,6 +4515,7 @@ public class PhotoModule
 
             CameraUtil.dumpParameters(mParameters);
             mCameraDevice.setParameters(mParameters);
+            mFocusManager.setParameters(mParameters);
 
             // Switch to gcam module if HDR+ was selected
             if (doModeSwitch && !mIsImageCaptureIntent) {
